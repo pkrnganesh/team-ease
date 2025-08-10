@@ -21,7 +21,7 @@ const InterviewScheduling = () => {
         <div className="w-64 min-h-screen bg-white/80 backdrop-blur-sm border-r border-border p-6">
           <div className="mb-8">
             <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              AI HR Suite
+              RuGanAI
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Intelligent hiring solutions

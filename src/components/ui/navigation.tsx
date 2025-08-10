@@ -1,12 +1,15 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Brain, Calendar, FileText, Users, BarChart } from "lucide-react";
+import { Brain, Calendar, FileText, Users, BarChart, Shield, Mail, UserPlus } from "lucide-react";
 
 const navigationItems = [
   { id: "dashboard", label: "Dashboard", icon: BarChart, path: "/" },
   { id: "screening", label: "Resume Screening", icon: Brain, path: "/screening" },
+  { id: "authenticity", label: "Authenticity Check", icon: Shield, path: "/authenticity" },
   { id: "interviews", label: "Interview Scheduling", icon: Calendar, path: "/interviews" },
+  { id: "emails", label: "Automated Emails", icon: Mail, path: "/emails" },
+  { id: "onboarding", label: "Onboarding", icon: UserPlus, path: "/onboarding" },
   { id: "candidates", label: "Candidates", icon: Users, path: "/candidates" },
   { id: "reports", label: "Reports", icon: FileText, path: "/reports" },
 ];

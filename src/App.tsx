@@ -3,9 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ResumeScreening from "./pages/ResumeScreening";
+import AuthenticityCheck from "./pages/AuthenticityCheck";
 import InterviewScheduling from "./pages/InterviewScheduling";
+import AutomatedEmails from "./pages/AutomatedEmails";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -17,9 +21,13 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route path="/" element={<Dashboard />} />
           <Route path="/screening" element={<ResumeScreening />} />
+          <Route path="/authenticity" element={<AuthenticityCheck />} />
           <Route path="/interviews" element={<InterviewScheduling />} />
+          <Route path="/emails" element={<AutomatedEmails />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
