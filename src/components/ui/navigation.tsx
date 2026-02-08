@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Brain, Calendar, FileText, Users, BarChart, Shield, Mail, UserPlus, Globe, Bot, Eye } from "lucide-react";
 
 const navigationItems = [
-  { id: "dashboard", label: "Dashboard", icon: BarChart, path: "/" },
+  { id: "dashboard", label: "Dashboard", icon: BarChart, path: "/dashboard" },
   { id: "job-posting", label: "Job Posting", icon: Globe, path: "/job-posting" },
   { id: "applications", label: "Applications", icon: Users, path: "/application-management" },
   { id: "screening", label: "Resume Screening", icon: Brain, path: "/screening" },
@@ -14,6 +14,7 @@ const navigationItems = [
   { id: "authenticity", label: "Authenticity Check", icon: Shield, path: "/authenticity" },
   { id: "emails", label: "Automated Emails", icon: Mail, path: "/emails" },
   { id: "onboarding", label: "Onboarding", icon: UserPlus, path: "/onboarding" },
+  {id:"logout", label:"Logout", icon: FileText, path:"/ "}
 ];
 
 interface NavigationProps {

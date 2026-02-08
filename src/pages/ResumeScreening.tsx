@@ -1,208 +1,276 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import ScreeningLoader from "@/components/ui/ScreeningLoader";
 import * as XLSX from "xlsx";
+
 import { Navigation } from "@/components/ui/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Upload, CheckCircle, AlertTriangle, User, Loader } from "lucide-react"; // import Loader
+import { Upload, Loader } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { match } from "assert";
 
 const ResumeScreening = () => {
-  const [file, setFile] = useState(null);
-  const [results, setResults] = useState([]);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [results, setResults] = useState<any[]>([]);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false); // NEW
+  const [loading, setLoading] = useState(false);
 
-  const onFileChange = e => setFile(e.target.files[0]);
+  /* ================= FETCH UNSCREENED JOBS ================= */
+  useEffect(() => {
+    const fetchJobs = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
 
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("job_openings")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("is_screened", false) // Only unscreened jobs
+        .order("created_at", { ascending: false });
+
+      if (!error) setJobs(data || []);
+    };
+
+    fetchJobs();
+  }, []);
+
+  const onFileChange = (e: any) => setFile(e.target.files[0]);
+
+  /* ================= STORE ALL CANDIDATES ================= */
+  const storeApplicants = async (candidates: any[]) => {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user || !selectedJob) return;
+
+    const payload = candidates.map(c => ({
+      
+      user_id: user.id,
+      job_id: selectedJob.id,
+      name: c.name || "Candidate",
+      email: c.email || null,
+      resume_link: c.resume_link,
+      matched_skills: c.matched_skills,
+      missing_skills: c.missing_skills,
+      match_percentage: c.match_percentage,
+      status: c.match_percentage >= selectedJob.min_match ? "shortlisted" : "rejected"
+    }));
+
+    // 🔹 Insert all candidates into applicants table
+    await supabase.from("applicants").insert(payload);
+
+    // 🔹 Mark job as screened
+    await supabase
+      .from("job_openings")
+      .update({ is_screened: true })
+      .eq("id", selectedJob.id);
+  };
+
+  /* ================= UPLOAD & ANALYZE ================= */
   const handleUpload = async () => {
     setError("");
     setResults([]);
-    setLoading(true); // start loading
+    setLoading(true);
 
-    if (!file) {
-      setError("Please upload an Excel sheet (.xls or .xlsx).");
+    if (!selectedJob) {
+      setError("Please select a job opening first.");
       setLoading(false);
       return;
     }
 
-    const validTypes = [
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    ];
-
-    if (!validTypes.includes(file.type)) {
-      setError("Only Excel files (.xls, .xlsx) are allowed.");
+    if (!file) {
+      setError("Please upload an Excel sheet.");
       setLoading(false);
       return;
     }
 
     try {
+      // Validate Excel
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet);
+      const rows = XLSX.utils.sheet_to_json(sheet) as any[];
 
-      if (rows.length === 0) {
-        setError("The Excel sheet is empty.");
-        setLoading(false);
-        return;
-      }
-
-      if (!Object.keys(rows[0]).includes("resume_link")) {
+      if (!rows.length || !rows[0].resume_link) {
         setError("Excel must contain a 'resume_link' column.");
         setLoading(false);
         return;
       }
 
-      // Send Excel to backend
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("job_title", selectedJob.title);
+      formData.append("job_description", selectedJob.description);
+      formData.append("job_skills", selectedJob.skills);
+      formData.append("min_match", selectedJob.min_match);
 
       const res = await fetch("http://localhost:8000/upload", {
         method: "POST",
-        body: formData,
+        body: formData
       });
 
       const data = await res.json();
+      console.log("RAW API RESPONSE 👉", data.results);
 
-      if (data.error) setError(data.error);
-      else setResults(data.results);
+      if (data.error) {
+        setError(data.error);
+      } else {
+        const sorted = data.results.sort(
+          (a: any, b: any) => b.match_percentage - a.match_percentage
+        );
 
+        setResults(sorted);
+
+        // Store all candidates (shortlist & review) in Supabase
+        await storeApplicants(sorted);
+      }
     } catch (err) {
       console.error(err);
-      setError("Invalid Excel format. Please check your file.");
+      setError("Failed to process resumes.");
     } finally {
-      setLoading(false); // stop loading
+      setLoading(false);
     }
   };
 
+  const shortlisted = selectedJob
+    ? results.filter(r => r.status === "shortlisted")
+    : [];
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
+      {loading && <ScreeningLoader />}
+
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-64 min-h-screen bg-white/80 backdrop-blur-sm border-r border-border p-6">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              RuGanAI
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Intelligent hiring solutions
-            </p>
-          </div>
+        <div className="w-64 min-h-screen bg-white/80 border-r p-6">
+          <h1 className="text-2xl font-bold text-primary">RuGanAI</h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            Intelligent hiring solutions
+          </p>
           <Navigation />
         </div>
 
-        {/* Main Content */}
+        {/* Main */}
         <div className="flex-1 p-8">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-foreground mb-2">
-              AI Resume Screening
-            </h2>
-            <p className="text-muted-foreground">
-              Upload Excel file containing resume links for analysis
-            </p>
-          </div>
+          <h2 className="text-3xl font-bold mb-6">AI Resume Screening</h2>
 
-          {/* Upload Section */}
-          <Card className="mb-8 rounded-2xl bg-gradient-card border-0 shadow-soft">
+          {/* JOB SELECTION */}
+          <Card className="mb-8 rounded-2xl shadow-soft">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5 text-primary" />
-                Upload Excel Sheet
-              </CardTitle>
+              <CardTitle>Select Job Opening</CardTitle>
               <CardDescription>
-                Upload only .xls or .xlsx files with a 'resume_link' column
+                Only unscreened jobs are shown
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="border-2 border-dashed border-primary/30 rounded-xl p-12 text-center hover:border-primary/50 transition-smooth cursor-pointer">
-                <Upload className="h-12 w-12 text-primary mx-auto mb-4" />
-                <p className="text-foreground font-medium mb-2">
-                  Upload Excel file
-                </p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Supports .xls and .xlsx files only
-                </p>
-
-                <input
-                  type="file"
-                  accept=".xls,.xlsx"
-                  onChange={onFileChange}
-                  style={{ marginBottom: "8px" }}
-                />
-
-                <Button className="rounded-xl" onClick={handleUpload} disabled={loading}>
-                  {loading ? (
-                    <div className="flex items-center gap-2">
-                      <Loader className="animate-spin h-4 w-4" />
-                      Processing...
-                    </div>
-                  ) : "Analyse Sheet"}
-                </Button>
-
-                {error && (
-                  <div style={{ color: "red", marginTop: "10px" }}>
-                    {error}
-                  </div>
-                )}
-              </div>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {jobs.map(job => (
+                <div
+                  key={job.id}
+                  onClick={() => setSelectedJob(job)}
+                  className={`p-4 rounded-xl border cursor-pointer transition ${
+                    selectedJob?.id === job.id
+                      ? "border-primary bg-primary/5"
+                      : "hover:border-muted"
+                  }`}
+                >
+                  <h3 className="font-semibold">{job.title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {job.skills}
+                  </p>
+                  <Badge className="mt-2">
+                    Min Match: {job.min_match}%
+                  </Badge>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
-          {/* Candidate Count */}
-          <div className="mt-6 text-center">
-            <span className="text-lg font-semibold">
-             No.of  Candidates meet criteria (≥ 60% match):{" "}
-              {results.filter(c => c.match_percentage >= 60).length}
-            </span>
-          </div>  
+          {/* UPLOAD */}
+          <Card className="mb-8 rounded-2xl shadow-soft">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Upload Resume Excel
+              </CardTitle>
+              <CardDescription>
+                Must contain <b>resume_link</b>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center">
+              <input
+                type="file"
+                accept=".xls,.xlsx"
+                onChange={onFileChange}
+                className="mb-4"
+              />
 
-          {/* Candidate Results */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-            {results.map((candidate, index) => (
-              <Card key={index} className="rounded-2xl bg-gradient-card border-0 shadow-soft">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center">
-                        <User className="h-6 w-6 text-white" />
+              <Button onClick={handleUpload} disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader className="h-4 w-4 animate-spin mr-2" />
+                    Screening...
+                  </>
+                ) : (
+                  "Start Screening"
+                )}
+              </Button>
+
+              {error && <p className="text-red-600 mt-4">{error}</p>}
+            </CardContent>
+          </Card>
+
+          {/* RESULTS */}
+          {results.length > 0 && (
+            <>
+             
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {results.map((c, i) => (
+                  <Card key={i} className="rounded-2xl shadow-soft">
+                    <CardHeader>
+                      <div className="flex justify-between">
+                        <CardTitle>
+                          {c.name || `Candidate ${i + 1}`}
+                        </CardTitle>
+                        <Badge
+                          className={
+                            c.match_percentage >= selectedJob.min_match
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }
+                        >
+                          { c.match_percentage >= selectedJob.min_match
+                            ? "Shortlisted"
+                            : "Rejected"}
+                        </Badge>
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{candidate.name || `Candidate ${index + 1}`}</CardTitle>
-                        
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-2 flex justify-between">
+                        <span>Match Score</span>
+                        <span className="font-bold">{c.match_percentage}%</span>
                       </div>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className={`${candidate.match_percentage > 70
-                        ? "bg-green-100 text-green-700 border-green-200"
-                        : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                        }`}
-                    >
-                      {candidate.match_percentage > 70 ? (
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                      ) : (
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                      )}
-                      {candidate.match_percentage > 70 ? "Verified" : "Review Required"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Overall Match Score</span>
-                      <span className="text-sm font-bold text-primary">
-                        {candidate.match_percentage}%
-                      </span>
-                    </div>
-                    <Progress value={candidate.match_percentage} className="h-2" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      <Progress value={c.match_percentage} />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

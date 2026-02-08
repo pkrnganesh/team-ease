@@ -1,53 +1,58 @@
 import axios from "axios";
 
-export async function analyzeResumeWithOllama(resumeText, jobDescription) {
+export async function analyzeResumeWithOllama(resumeText, jobSkills) {
   try {
     console.log("🔥 Calling Ollama...");
-
     const prompt = `
-Return ONLY valid JSON. No explanations.
+You are an ATS system.
+
+Rules:
+- Match ONLY explicit technical skills
+- Do NOT infer or assume skills
+- Ignore soft skills
+- Ignore generic terms
+- Skills must match EXACT wording or obvious variants
+- Do NOT calculate scores
+- Do NOT explain anything
+
+Return ONLY valid JSON in this format:
 
 {
-  "match_percentage": number,
   "matched_skills": [],
   "missing_skills": []
 }
 
-Job Description:
-${jobDescription}
+Job Required Skills:
+${jobSkills}
 
-Resume:
+Resume Text:
 ${resumeText}
 `;
 
     const response = await axios.post(
-      "http://localhost:11434/api/generate",
+      "http://127.0.0.1:11434/api/generate",
       {
-        model: "llama3.1",   
-        prompt: prompt,
+        model: "llama3",
+        prompt,
         stream: false
       },
-      {
-        headers: { "Content-Type": "application/json" }
-      }
+      { timeout: 0 }
     );
 
-    const rawText = response.data?.response || "";
-    console.log("🟢 RAW AI OUTPUT:", rawText);
-
-    const json = extractJSON(rawText);
-
+    const raw = response.data?.response || "";
+    const json = extractJSON(raw);
+    
     return {
-      match_percentage: json?.match_percentage || 0,
-      matched_skills: json?.matched_skills || [],
-      missing_skills: json?.missing_skills || []
+      matched_skills: json.matched_skills || [],
+      missing_skills: json.missing_skills || []
     };
 
   } catch (err) {
-    console.error("❌ Ollama Error:", err.message);
-    return { match_percentage: 0, matched_skills: [], missing_skills: [] };
+    console.error("❌ Ollama error:", err.message);
+    return { matched_skills: [], missing_skills: [] };
   }
 }
+
 function extractJSON(text) {
   try {
     const start = text.indexOf("{");
