@@ -1,0 +1,21 @@
+{
+  "name": "team-ease-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Backend API for Team Ease",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "resend": "^3.0.0",
+    "@supabase/supabase-js": "^2.38.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
